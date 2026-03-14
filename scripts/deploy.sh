@@ -38,7 +38,8 @@ python3 -m venv "$VENV_DIR"
 echo "==> Writing env file"
 mkdir -p "$ENV_DIR"
 printf 'PIHOLE_API_KEY=%s\n' "$API_KEY" > "$ENV_DIR/.env"
-chmod 600 "$ENV_DIR/.env"
+chown root:www-data "$ENV_DIR/.env"
+chmod 640 "$ENV_DIR/.env"
 
 echo "==> Installing scripts and services"
 cp "$APP_DIR/scripts/fix-pihole-perms.sh" /usr/local/bin/fix-pihole-perms.sh
