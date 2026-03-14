@@ -57,7 +57,8 @@ cp "$APP_DIR/services/fix-pihole-perms.service.tpl" \
 
 echo "==> Enabling and starting services"
 systemctl daemon-reload
-systemctl enable --now pihole-flask-api fix-pihole-perms
+systemctl enable pihole-flask-api fix-pihole-perms
+systemctl restart pihole-flask-api fix-pihole-perms
 
 echo "==> Done: $(hostname)"
 ENDSSH
