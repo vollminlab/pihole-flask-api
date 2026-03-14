@@ -47,18 +47,15 @@ sudo nano /etc/pihole-flask-api/.env
 sudo chmod 600 /etc/pihole-flask-api/.env
 ```
 
-### 3. Install systemd services
+### 3. Deploy
 
-Edit the template files in `services/` to fill in `{{VENV}}` and `{{APP}}` with your actual paths, then install:
+Use the provided deploy script, which handles cloning the repo, setting up the virtualenv, writing the env file, and installing the systemd services:
 
 ```bash
-sudo cp services/pihole-flask-api.service.tpl /etc/systemd/system/pihole-flask-api.service
-sudo cp services/fix-pihole-perms.service.tpl /etc/systemd/system/fix-pihole-perms.service
-sudo cp scripts/fix-pihole-perms.sh /usr/local/bin/fix-pihole-perms.sh
-sudo chmod +x /usr/local/bin/fix-pihole-perms.sh
-sudo systemctl daemon-reload
-sudo systemctl enable --now pihole-flask-api fix-pihole-perms
+bash scripts/deploy.sh <host>
 ```
+
+The script will prompt for the API key and requires SSH access with sudo on the target host.
 
 ## Security notes
 

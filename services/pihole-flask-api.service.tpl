@@ -6,7 +6,7 @@ Wants=pihole-FTL.service
 [Service]
 EnvironmentFile=/etc/pihole-flask-api/.env
 
-ExecStart={{VENV}}/bin/python {{APP}}/src/recordimporter.py
+ExecStart={{VENV}}/bin/gunicorn --workers 2 --bind 0.0.0.0:5001 --chdir {{APP}}/src recordimporter:app
 WorkingDirectory={{APP}}
 Environment="PATH={{VENV}}/bin"
 User=www-data

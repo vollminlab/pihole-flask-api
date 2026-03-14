@@ -116,6 +116,3 @@ def delete_a_record():
 
     return jsonify({"message": f"Deleted {removed_count} record(s) for {domain}"}), 200
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001)
-
