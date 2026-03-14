@@ -35,6 +35,10 @@ echo "==> Setting up virtualenv"
 python3 -m venv "$VENV_DIR"
 "$VENV_DIR/bin/pip" install -q -r "$APP_DIR/requirements.txt"
 
+echo "==> Creating log file"
+touch /opt/pihole-api.log
+chown www-data:www-data /opt/pihole-api.log
+
 echo "==> Writing env file"
 mkdir -p "$ENV_DIR"
 printf 'PIHOLE_API_KEY=%s\n' "$API_KEY" > "$ENV_DIR/.env"
