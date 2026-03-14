@@ -32,7 +32,7 @@ else
 fi
 
 echo "==> Setting up virtualenv"
-python3 -m venv "$VENV_DIR"
+python3 -m venv --clear "$VENV_DIR"
 "$VENV_DIR/bin/pip" install -q -r "$APP_DIR/requirements.txt"
 
 echo "==> Creating log file"
