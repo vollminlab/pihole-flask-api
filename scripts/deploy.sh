@@ -5,6 +5,7 @@ TARGET="${1:?Usage: $0 <host>}"
 APP_DIR="/opt/pihole-flask-api"
 VENV_DIR="/opt/pihole-flask-api-venv"
 ENV_DIR="/etc/pihole-flask-api"
+# If you have forked this repo, update REPO_URL to point to your fork.
 REPO_URL="https://github.com/svollmi1/pihole-flask-api.git"
 
 read -rsp "PIHOLE_API_KEY for ${TARGET}: " API_KEY

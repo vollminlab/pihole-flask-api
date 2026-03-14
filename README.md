@@ -1,6 +1,17 @@
 # pihole-flask-api
 
-A lightweight Flask REST API for managing Pi-hole DNS A records. Allows authorized clients to add and remove entries in Pi-hole's `pihole.toml` configuration via HTTP.
+A lightweight REST API for managing Pi-hole DNS A records. Exposes two HTTP endpoints that allow authorized clients to add and remove entries in Pi-hole's `pihole.toml` configuration file. Useful for automating DNS record management from scripts, Ansible, or other tooling without SSH access to the Pi-hole host.
+
+## How it works
+
+The API runs as a Gunicorn/Flask service on the Pi-hole host itself, running as `www-data` with group access to `pihole.toml`. A companion `fix-pihole-perms` service watches `/etc/pihole` with `inotifywait` and resets `pihole.toml` ownership after Pi-hole rewrites it — keeping the API able to write DNS records even across Pi-hole updates and restarts.
+
+## Requirements
+
+- Debian-based Linux host (Raspberry Pi OS, Ubuntu, etc.)
+- Pi-hole v6+ (uses `pihole.toml`)
+- SSH access with `sudo` to the target host
+- Git Bash or any bash shell on your local machine for running the deploy script
 
 ## Endpoints
 
@@ -9,56 +20,130 @@ A lightweight Flask REST API for managing Pi-hole DNS A records. Allows authoriz
 | `POST` | `/add-a-record` | Add a DNS A record |
 | `DELETE` | `/delete-a-record` | Remove a DNS A record by domain |
 
-### Request bodies
+All requests require an `Authorization: Bearer <API_KEY>` header.
 
-**POST /add-a-record**
-```json
-{ "domain": "myhost.lan", "ip": "192.168.1.100" }
-```
+### POST /add-a-record
 
-**DELETE /delete-a-record**
-```json
-{ "domain": "myhost.lan" }
-```
-
-All requests require a `Authorization: Bearer <API_KEY>` header.
-
-## Setup
-
-### 1. Install dependencies
+Adds a DNS A record to Pi-hole. Returns `409` if the record already exists.
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+curl -X POST http://<host>:5001/add-a-record \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <API_KEY>' \
+  -d '{"domain": "myhost.lan", "ip": "192.168.1.100"}'
 ```
 
-> `inotify-tools` is also required on the host for the permissions-watcher script:
-> `sudo apt install inotify-tools`
+```json
+{"message": "Record added successfully"}
+```
 
-### 2. Configure the API key
+### DELETE /delete-a-record
 
-Copy `.env.example` to `/etc/pihole-flask-api/.env` and set a strong random key:
+Removes all A records for the given domain. Returns `404` if no matching record exists.
 
 ```bash
-sudo mkdir -p /etc/pihole-flask-api
-sudo cp .env.example /etc/pihole-flask-api/.env
-sudo nano /etc/pihole-flask-api/.env
-sudo chmod 600 /etc/pihole-flask-api/.env
+curl -X DELETE http://<host>:5001/delete-a-record \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <API_KEY>' \
+  -d '{"domain": "myhost.lan"}'
 ```
 
-### 3. Deploy
+```json
+{"message": "Deleted 1 record(s) for myhost.lan"}
+```
 
-Use the provided deploy script, which handles cloning the repo, setting up the virtualenv, writing the env file, and installing the systemd services:
+## Deployment
+
+### 1. Fork and configure
+
+Fork this repo, then update `REPO_URL` in `scripts/deploy.sh` to point to your fork:
+
+```bash
+REPO_URL="https://github.com/<your-username>/pihole-flask-api.git"
+```
+
+### 2. Generate an API key
+
+Use any method to generate a strong random key, for example:
+
+```bash
+openssl rand -base64 32
+```
+
+### 3. Run the deploy script
+
+The deploy script handles everything on the target host: installing dependencies, cloning the repo, setting up the virtualenv, writing the env file, and installing the systemd services.
 
 ```bash
 bash scripts/deploy.sh <host>
 ```
 
-The script will prompt for the API key and requires SSH access with sudo on the target host.
+The script will prompt for the API key and requires SSH access with `sudo` on the target host. It is idempotent — safe to re-run for updates.
+
+**Note for Windows users:** Run from Git Bash using the Windows OpenSSH binary to avoid SSH key conflicts:
+
+```powershell
+& "C:\Program Files\Git\bin\bash.exe" -c 'export PATH="/c/Windows/System32/OpenSSH:$PATH" && bash scripts/deploy.sh <host>'
+```
+
+### What gets deployed
+
+| Path | Description |
+|------|-------------|
+| `/opt/pihole-flask-api/` | Application code (git clone) |
+| `/opt/pihole-flask-api-venv/` | Python virtualenv |
+| `/etc/pihole-flask-api/.env` | API key (root:www-data, mode 640) |
+| `/opt/pihole-api.log` | Application log |
+| `/usr/local/bin/fix-pihole-perms.sh` | Permissions watcher script |
+| `/etc/systemd/system/pihole-flask-api.service` | Main service |
+| `/etc/systemd/system/fix-pihole-perms.service` | Permissions watcher service |
+
+## Configuration
+
+The only required configuration is the API key, set in `/etc/pihole-flask-api/.env`:
+
+```
+PIHOLE_API_KEY=your-secret-api-key-here
+```
+
+See `.env.example` for the template. The following paths are hardcoded in `src/recordimporter.py` and can be changed there if needed:
+
+| Variable | Default |
+|----------|---------|
+| `TOML_PATH` | `/etc/pihole/pihole.toml` |
+| `LOG_FILE` | `/opt/pihole-api.log` |
 
 ## Security notes
 
-- Run behind a reverse proxy (nginx, Caddy) with TLS — the API transmits the Bearer token in plain HTTP otherwise.
-- Restrict access to trusted hosts/networks at the firewall level; the service binds to `0.0.0.0:5001`.
-- Keep `/etc/pihole-flask-api/.env` readable only by the service user (`chmod 600`).
+- **Use a reverse proxy with TLS** (nginx, Caddy) — the Bearer token is transmitted in plain HTTP otherwise.
+- **Restrict network access** — the service binds to `0.0.0.0:5001`; limit access to trusted hosts at the firewall level.
+- **Protect the env file** — `/etc/pihole-flask-api/.env` is `root:www-data 640`; only the service user can read it.
+- **Rotate the API key** by updating `/etc/pihole-flask-api/.env` and restarting the service: `sudo systemctl restart pihole-flask-api`.
+
+## Troubleshooting
+
+**Service fails to start**
+```bash
+sudo journalctl -u pihole-flask-api --no-pager -n 30
+```
+
+**API returns 401**
+Verify the `Authorization: Bearer <key>` header matches the key in `/etc/pihole-flask-api/.env`.
+
+**Records not persisting across Pi-hole restarts**
+Check that the `fix-pihole-perms` service is running:
+```bash
+sudo systemctl status fix-pihole-perms
+```
+
+**Permission denied on `pihole.toml`**
+The `www-data` user needs read/write access. The `fix-pihole-perms` service handles this automatically, but you can also fix it manually:
+```bash
+sudo chown pihole:pihole /etc/pihole/pihole.toml
+sudo chmod 664 /etc/pihole/pihole.toml
+sudo setfacl -m u:www-data:rw /etc/pihole/pihole.toml
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
