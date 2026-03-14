@@ -10,7 +10,7 @@ ExecStart={{VENV}}/bin/python {{APP}}/src/recordimporter.py
 WorkingDirectory={{APP}}
 Environment="PATH={{VENV}}/bin"
 User=www-data
-Group=pihole-api
+Group=www-data
 Restart=always
 
 [Install]
