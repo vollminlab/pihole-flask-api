@@ -1,6 +1,6 @@
 # pihole-flask-api
 
-A lightweight REST API for managing Pi-hole DNS A records. Exposes two HTTP endpoints that allow authorized clients to add and remove entries in Pi-hole's `pihole.toml` configuration file. Useful for automating DNS record management from scripts, Ansible, or other tooling without SSH access to the Pi-hole host.
+A lightweight REST API for managing Pi-hole DNS records. Exposes HTTP endpoints that allow authorized clients to add and remove A records and CNAME records in Pi-hole's `pihole.toml` configuration file. Useful for automating DNS record management from scripts, Ansible, or other tooling without SSH access to the Pi-hole host.
 
 ## How it works
 
@@ -19,12 +19,14 @@ The API runs as a Gunicorn/Flask service on the Pi-hole host itself, running as 
 |--------|------|-------------|
 | `POST` | `/add-a-record` | Add a DNS A record |
 | `DELETE` | `/delete-a-record` | Remove a DNS A record by domain |
+| `POST` | `/add-cname-record` | Add a DNS CNAME record |
+| `DELETE` | `/delete-cname-record` | Remove a DNS CNAME record by domain |
 
 All requests require an `Authorization: Bearer <API_KEY>` header.
 
 ### POST /add-a-record
 
-Adds a DNS A record to Pi-hole. Returns `409` if the record already exists.
+Adds a DNS A record to `dns.hosts` in `pihole.toml`. Returns `409` if the record already exists.
 
 ```bash
 curl -X POST http://<host>:5001/add-a-record \
@@ -50,6 +52,36 @@ curl -X DELETE http://<host>:5001/delete-a-record \
 
 ```json
 {"message": "Deleted 1 record(s) for myhost.lan"}
+```
+
+### POST /add-cname-record
+
+Adds a CNAME record to `dns.cnameRecords` in `pihole.toml`. Returns `409` if a CNAME for that domain already exists.
+
+```bash
+curl -X POST http://<host>:5001/add-cname-record \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <API_KEY>' \
+  -d '{"domain": "go.vollminlab.com", "target": "haproxyvip.vollminlab.com"}'
+```
+
+```json
+{"message": "Record added successfully"}
+```
+
+### DELETE /delete-cname-record
+
+Removes the CNAME record for the given domain. Returns `404` if no matching record exists.
+
+```bash
+curl -X DELETE http://<host>:5001/delete-cname-record \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <API_KEY>' \
+  -d '{"domain": "go.vollminlab.com"}'
+```
+
+```json
+{"message": "Deleted 1 record(s) for go.vollminlab.com"}
 ```
 
 ## Deployment

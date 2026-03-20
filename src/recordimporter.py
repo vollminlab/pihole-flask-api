@@ -116,3 +116,77 @@ def delete_a_record():
 
     return jsonify({"message": f"Deleted {removed_count} record(s) for {domain}"}), 200
 
+
+@app.route("/add-cname-record", methods=["POST"])
+def add_cname_record():
+    logger.debug("Received POST /add-cname-record: %s", request.json)
+    if not _authorize():
+        return jsonify({"error": "unauthorized"}), 401
+
+    data = request.get_json() or {}
+    domain = data.get("domain")
+    target = data.get("target")
+    if not domain or not target:
+        logger.error("Missing domain or target in POST")
+        return jsonify({"error": "Missing domain or target"}), 400
+
+    try:
+        toml_data = _load_toml()
+        cnames = toml_data.setdefault("dns", {}).setdefault("cnameRecords", [])
+    except Exception as e:
+        logger.error("Failed to read TOML: %s", e)
+        return jsonify({"error": f"Failed to read TOML: {e}"}), 500
+
+    entry = f"{domain},{target}"
+    if any(r.split(",")[0] == domain for r in cnames):
+        logger.error("CNAME record for %s already exists", domain)
+        return jsonify({"error": "Record already exists"}), 409
+
+    cnames.append(entry)
+    try:
+        _save_toml(toml_data)
+        logger.debug("Appended and saved new CNAME record: %s", entry)
+    except Exception as e:
+        logger.error("Failed to write TOML: %s", e)
+        return jsonify({"error": f"Failed to write TOML: {e}"}), 500
+
+    return jsonify({"message": "Record added successfully"}), 200
+
+
+@app.route("/delete-cname-record", methods=["DELETE"])
+def delete_cname_record():
+    logger.debug("Received DELETE /delete-cname-record: %s", request.json)
+    if not _authorize():
+        return jsonify({"error": "unauthorized"}), 401
+
+    data = request.get_json() or {}
+    domain = data.get("domain")
+    if not domain:
+        logger.error("Missing domain in DELETE")
+        return jsonify({"error": "Missing domain"}), 400
+
+    try:
+        toml_data = _load_toml()
+        cnames = toml_data.setdefault("dns", {}).setdefault("cnameRecords", [])
+    except Exception as e:
+        logger.error("Failed to read TOML: %s", e)
+        return jsonify({"error": f"Failed to read TOML: {e}"}), 500
+
+    before = len(cnames)
+    cnames = [r for r in cnames if r.split(",")[0] != domain]
+    removed_count = before - len(cnames)
+
+    if removed_count == 0:
+        logger.error("No CNAME record found for domain %s", domain)
+        return jsonify({"error": "Record not found"}), 404
+
+    toml_data["dns"]["cnameRecords"] = cnames
+    try:
+        _save_toml(toml_data)
+        logger.debug("Removed %d CNAME entries for domain %s", removed_count, domain)
+    except Exception as e:
+        logger.error("Failed to write TOML: %s", e)
+        return jsonify({"error": f"Failed to write TOML: {e}"}), 500
+
+    return jsonify({"message": f"Deleted {removed_count} record(s) for {domain}"}), 200
+
