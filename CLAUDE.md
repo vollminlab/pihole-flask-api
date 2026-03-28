@@ -56,7 +56,7 @@ ssh pihole1 "cd /opt/pihole-flask-api && sudo git pull && sudo systemctl restart
 ssh pihole2 "cd /opt/pihole-flask-api && sudo git pull && sudo systemctl restart pihole-flask-api"
 ```
 
-Config sync: nebula-sync replicates pihole1's config to pihole2, so DNS record changes only need to be made against pihole1's API.
+DNS record changes via the API must be made against **both** pihole1 (`192.168.100.2:5001`) and pihole2 (`192.168.100.3:5001`) directly. Do not rely on nebula-sync to replicate API-driven changes — it syncs on its own schedule and the timing is unpredictable.
 
 ## Key files
 
