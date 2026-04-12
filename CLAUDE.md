@@ -27,7 +27,7 @@ All requests require `Authorization: Bearer <API_KEY>`.
 API key stored in `/etc/pihole-flask-api/.env` on each host. Retrieve from 1Password:
 
 ```bash
-op read "op://Homelab/recordimporter-api-token/password"
+op read "op://Homelab/Recordimporter/credential"
 ```
 
 ## DNS architecture
