@@ -112,6 +112,8 @@ bash scripts/deploy.sh <host>
 
 The script will prompt for the API key and requires SSH access with `sudo` on the target host. It is idempotent — safe to re-run for updates.
 
+> **Deploy to both hosts.** The API runs independently on `pihole1` and `pihole2`. Run the deploy script against both. DNS record changes via the API must also be issued against both hosts directly (`192.168.100.2:5001` and `192.168.100.3:5001`) — do not rely on nebula-sync to replicate API-driven changes.
+
 ### What gets deployed
 
 | Path | Description |
