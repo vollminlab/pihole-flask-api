@@ -11,7 +11,7 @@ env:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: vollminlab
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
