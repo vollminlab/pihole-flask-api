@@ -4,10 +4,38 @@ import logging
 import os
 
 env_path = "/etc/pihole-flask-api/.env"
+
+
+def _load_env_file(path):
+    """
+    Read a KEY=VALUE file into os.environ.
+
+    Skips blank lines, comments, and lines with no '=' rather than assigning
+    from them. A blank line used to produce os.environ[""] = "", which raises
+    OSError: [Errno 22] and killed the app at import — so one stray newline in
+    the env file took the service down with a traceback that named neither the
+    file nor the line.
+    """
+    with open(path, "r") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            key, sep, value = line.partition("=")
+            key = key.strip()
+            if not sep or not key:
+                continue
+            value = value.strip()
+            # Strip one matched pair of surrounding quotes, so KEY="v" and
+            # KEY='v' both yield v while a value that merely contains a quote
+            # is left alone.
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+                value = value[1:-1]
+            os.environ[key] = value
+
+
 if os.path.isfile(env_path):
-    for line in open(env_path, 'r'):
-        key,_,value = line.strip().partition("=")
-        os.environ[key] = value
+    _load_env_file(env_path)
 
 TOML_PATH = "/etc/pihole/pihole.toml"
 API_KEY = os.environ.get("PIHOLE_API_KEY")
@@ -42,6 +70,11 @@ def _load_toml():
 def _save_toml(data):
     with open(TOML_PATH, "w", encoding="utf-8") as f:
         f.write(tomlkit.dumps(data))
+
+def _host_domain(entry):
+    """Domain field of a dns.hosts entry, or None if the line is malformed."""
+    parts = str(entry).split()
+    return parts[1] if len(parts) > 1 else None
 
 @app.route("/add-a-record", methods=["POST"])
 def add_a_record():
@@ -97,9 +130,13 @@ def delete_a_record():
         logger.error("Failed to read TOML: %s", e)
         return jsonify({"error": f"Failed to read TOML: {e}"}), 500
 
-    # Remove any entries ending in the given domain
+    # Remove any entries whose domain field matches.
+    # A dns.hosts entry is "<ip> <domain> [aliases...]", but a malformed
+    # single-token line makes h.split()[1] raise IndexError — which escaped the
+    # surrounding try and turned one bad line in pihole.toml into an unhandled
+    # 500 for every delete, regardless of the domain asked for.
     before = len(hosts)
-    hosts = [h for h in hosts if not h.split() or h.split()[1] != domain]
+    hosts = [h for h in hosts if _host_domain(h) != domain]
     removed_count = before - len(hosts)
 
     if removed_count == 0:
