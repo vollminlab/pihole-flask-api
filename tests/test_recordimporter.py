@@ -247,3 +247,93 @@ def test_delete_cname_toml_write_failure(client, toml_file):
         r = client.delete("/delete-cname-record", json={"domain": "alias.local"},
                           headers=GOOD_AUTH)
     assert r.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# Regression: malformed input must not crash the service
+# ---------------------------------------------------------------------------
+
+def test_delete_a_record_tolerates_malformed_host_entry(client, toml_file):
+    """A single-token dns.hosts line must not raise IndexError.
+
+    "<ip>" with no domain used to hit h.split()[1] outside the try block, so
+    one bad line made every delete return an unhandled 500.
+    """
+    hosts = tomlkit.array()
+    hosts.append("192.168.100.9")                       # malformed: no domain
+    hosts.append("192.168.100.10 keep.vollminlab.com")
+    hosts.append("192.168.100.11 drop.vollminlab.com")
+    toml_file.write_text(tomlkit.dumps(_make_toml(hosts=hosts)), encoding="utf-8")
+
+    resp = client.delete("/delete-a-record",
+                         json={"domain": "drop.vollminlab.com"},
+                         headers=GOOD_AUTH)
+
+    assert resp.status_code == 200
+    remaining = list(_read_hosts(toml_file))
+    assert "192.168.100.9" in remaining              # malformed line preserved
+    assert "192.168.100.10 keep.vollminlab.com" in remaining
+    assert "192.168.100.11 drop.vollminlab.com" not in remaining
+
+
+def test_delete_a_record_malformed_only_returns_404(client, toml_file):
+    """Malformed lines alone match nothing, so the domain is simply not found."""
+    hosts = tomlkit.array()
+    hosts.append("192.168.100.9")
+    toml_file.write_text(tomlkit.dumps(_make_toml(hosts=hosts)), encoding="utf-8")
+
+    resp = client.delete("/delete-a-record",
+                         json={"domain": "absent.vollminlab.com"},
+                         headers=GOOD_AUTH)
+
+    assert resp.status_code == 404
+
+
+def test_host_domain_helper():
+    assert recordimporter._host_domain("10.0.0.1 host.example.com") == "host.example.com"
+    assert recordimporter._host_domain("10.0.0.1 host.example.com alias") == "host.example.com"
+    assert recordimporter._host_domain("10.0.0.1") is None
+    assert recordimporter._host_domain("") is None
+    assert recordimporter._host_domain("   ") is None
+
+
+# ---------------------------------------------------------------------------
+# Regression: .env parsing
+# ---------------------------------------------------------------------------
+
+def test_load_env_file_skips_blanks_comments_and_junk(tmp_path, monkeypatch):
+    """A blank line used to set os.environ[""] and raise OSError at import."""
+    env = tmp_path / ".env"
+    env.write_text(
+        "\n"
+        "# a comment\n"
+        "PIHOLE_API_KEY=secret-value\n"
+        "\n"
+        "   \n"
+        "NO_EQUALS_SIGN\n"
+        "=orphan-value\n"
+        'QUOTED="quoted-value"\n'
+        "SINGLE='single-value'\n"
+        "SPACED = spaced-value \n",
+        encoding="utf-8",
+    )
+
+    seen = {}
+    monkeypatch.setattr(recordimporter.os, "environ", seen)
+    recordimporter._load_env_file(str(env))
+
+    assert seen["PIHOLE_API_KEY"] == "secret-value"
+    assert seen["QUOTED"] == "quoted-value"
+    assert seen["SINGLE"] == "single-value"
+    assert seen["SPACED"] == "spaced-value"
+    assert "" not in seen              # the crash: os.environ[""] = ""
+    assert "NO_EQUALS_SIGN" not in seen
+
+
+def test_load_env_file_preserves_inner_quotes(tmp_path, monkeypatch):
+    env = tmp_path / ".env"
+    env.write_text("""KEY=pa"ss\n""", encoding="utf-8")
+    seen = {}
+    monkeypatch.setattr(recordimporter.os, "environ", seen)
+    recordimporter._load_env_file(str(env))
+    assert seen["KEY"] == 'pa"ss'
