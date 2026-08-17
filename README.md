@@ -202,16 +202,18 @@ never committed, never passed on a command line that lands in shell history.
 |------|-------|---------|-------|
 | `PIHOLE_API_KEY` | `/etc/pihole-flask-api/.env` | none — **required** | Bearer token; missing value aborts startup |
 
-The in-process `.env` parser is deliberately minimal: it splits each line on the first `=` and
-takes the rest verbatim. Consequences —
+The in-process `.env` parser (`_load_env_file`) handles the shapes a hand-edited file actually
+takes: blank lines, `#` comments, and lines with no `=` are skipped, and one *matched* pair of
+surrounding quotes is stripped so `KEY="v"` and `KEY='v'` both yield `v` while a value that merely
+contains a quote is left intact.
 
-- **No quote stripping.** `PIHOLE_API_KEY="abc"` makes the token literally `"abc"`, quotes included.
-- **No blank lines.** An empty line produces an empty variable name and raises
-  `OSError: [Errno 22] Invalid argument` at import, so the service fails to start.
-- Comment lines are tolerated but become junk environment variables.
+It is still not a shell: there is no interpolation, no multi-line values, and no `export` prefix
+handling. Write the file as `.env.example` shows — one `KEY=value` per line.
 
-Write the file exactly as `.env.example` shows: one `KEY=value` line, no quotes, no trailing blank
-line.
+> Until [#6](https://github.com/vollminlab/pihole-flask-api/pull/6), a single blank line produced
+> `os.environ[""] = ""`, which raises `OSError: [Errno 22]` at import and took the service down with
+> a traceback naming neither the file nor the line. If you hit that on an older deployment, that is
+> the cause.
 
 ### Module constants
 
@@ -254,7 +256,7 @@ Edit at the top of `scripts/deploy.sh`.
 | `APP_DIR` | `/opt/pihole-flask-api` |
 | `VENV_DIR` | `/opt/pihole-flask-api-venv` |
 | `ENV_DIR` | `/etc/pihole-flask-api` |
-| `REPO_URL` | `https://github.com/svollmi1/pihole-flask-api.git` — point at your fork |
+| `REPO_URL` | `https://github.com/vollminlab/pihole-flask-api.git` — change if deploying a fork |
 
 ---
 
@@ -389,7 +391,7 @@ sudo journalctl -u pihole-flask-api --no-pager -n 30
 ```
 
 `RuntimeError: Missing PIHOLE_API_KEY` means the env file is absent, unreadable by `www-data`, or
-empty. `OSError: [Errno 22] Invalid argument` at import means it contains a blank line.
+has no `PIHOLE_API_KEY=` line.
 
 **`401` on every request**
 Confirm the header is `Authorization: Bearer <key>` — the space after `Bearer` is required — and
