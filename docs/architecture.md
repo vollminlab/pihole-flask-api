@@ -2,7 +2,7 @@
 
 ## Overview
 
-A lightweight Flask/Gunicorn REST API that provides programmatic management of Pi-hole v6+ DNS records. It reads and writes directly to  on the Pi-hole host.
+A lightweight Flask/Gunicorn REST API that provides programmatic management of Pi-hole v6+ DNS records. It reads and writes directly to `/etc/pihole/pihole.toml` on the Pi-hole host.
 
 The API runs identically on **both pihole1 and pihole2**. There is no automatic replication between them — callers must write to both hosts independently.
 
@@ -33,8 +33,8 @@ Pi-hole v6 stores DNS records in `/etc/pihole/pihole.toml` under `[dns]`:
   ]
 ```
 
-**A record format:** `"<IP> <hostname>"` (space-separated, single string per entry)
-**CNAME format:** `"<alias>,<target>"` (comma-separated, single string per entry)
+- **A record format:** `"<IP> <hostname>"` (space-separated, single string per entry)
+- **CNAME format:** `"<alias>,<target>"` (comma-separated, single string per entry)
 
 ## Permissions problem and solution
 
