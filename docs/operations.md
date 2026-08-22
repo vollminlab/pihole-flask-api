@@ -31,7 +31,10 @@ ssh pihole1 "sudo tail -f /opt/pihole-api.log"
 
 # Quick health test
 API_KEY=$(op read "op://Homelab/recordimporter-api-token/password")
-curl -s -o /dev/null -w "%{http_code}"   -H "Authorization: Bearer $API_KEY"   http://192.168.100.2:5001/add-a-record   -d '{"domain":"health-check.vollminlab.com","ip":"127.0.0.1"}'
+curl -s -o /dev/null -w "%{http_code}" \
+  -H "Authorization: Bearer $API_KEY" \
+  http://192.168.100.2:5001/add-a-record \
+  -d '{"domain":"health-check.vollminlab.com","ip":"127.0.0.1"}'
 # Then clean up: DELETE the health-check record
 ```
 
