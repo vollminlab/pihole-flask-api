@@ -1,0 +1,37 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  // Conventions match vollminlab/k8s-vollminlab-cluster so dependency PRs look the
+  // same across the org: same quiet-hours schedule, same labels, same commit prefix.
+  "timezone": "America/New_York",
+  "schedule": ["after 10pm every weekday", "before 5am every weekday", "every weekend"],
+  "prHourlyLimit": 5,
+  "prConcurrentLimit": 10,
+  "labels": ["renovate", "dependencies"],
+  "commitMessagePrefix": "chore(deps):",
+  "enabledManagers": ["pip_requirements", "github-actions"],
+  "packageRules": [
+    {
+      // GitHub Actions bumps are the one class where CI is direct proof: the workflow
+      // that validates the PR is itself the thing that runs the new action version.
+      "matchManagers": ["github-actions"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      // Non-major Python updates, automerged only once the required `test (3.11)` and
+      // `test (3.12)` checks pass. The suite drives the Flask app end to end, so a
+      // green run means Flask and tomlkit were exercised. gunicorn is not exercised by
+      // the tests, so it stays manual.
+      //
+      // Merging does not deploy. A host picks up a new pin only when someone re-runs
+      // scripts/deploy.sh against it -- the `git pull` + restart in docs/operations.md
+      // does not reinstall requirements.txt.
+      "matchManagers": ["pip_requirements"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchPackageNames": ["!gunicorn"],
+      "automerge": true,
+      "automergeType": "pr"
+    }
+  ]
+}
